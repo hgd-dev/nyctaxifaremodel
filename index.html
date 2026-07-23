@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Interactive Manhattan yellow taxi fare estimator using a two-stage regression model." />
+  <title>NYC Manhattan Taxi Fare Prediction Model</title>
+  <style>
+    :root {
+      --yellow: #f7c948;
+      --yellow-dark: #d49a00;
+      --ink: #17191d;
+      --panel: #22262c;
+      --panel-2: #2a3038;
+      --muted: #aeb7c2;
+      --white: #f8fafc;
+      --line: rgba(255,255,255,.11);
+      --success: #58d68d;
+      --shadow: 0 24px 70px rgba(0,0,0,.30);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--white);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(circle at 18% 16%, rgba(247,201,72,.16), transparent 28rem),
+        radial-gradient(circle at 85% 82%, rgba(67,104,145,.18), transparent 32rem),
+        #111419;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+    }
+
+    .app {
+      width: min(1040px, 100%);
+      border: 1px solid var(--line);
+      background: rgba(27,31,37,.90);
+      box-shadow: var(--shadow);
+      border-radius: 26px;
+      overflow: hidden;
+      backdrop-filter: blur(16px);
+    }
+
+    .header {
+      padding: 34px 38px 26px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 28px;
+    }
+
+    .eyebrow {
+      color: var(--yellow);
+      text-transform: uppercase;
+      letter-spacing: .16em;
+      font-size: .76rem;
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(2rem, 5vw, 3.8rem);
+      letter-spacing: -.045em;
+      line-height: .98;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      margin: 14px 0 0;
+      max-width: 680px;
+      line-height: 1.55;
+    }
+
+    .taxi-mark {
+      flex: 0 0 auto;
+      width: 70px;
+      height: 70px;
+      border-radius: 20px;
+      display: grid;
+      place-items: center;
+      color: var(--ink);
+      background: var(--yellow);
+      font-size: 2.1rem;
+      box-shadow: 0 12px 28px rgba(247,201,72,.20);
+    }
+
+    .content {
+      display: grid;
+      grid-template-columns: 1.05fr .95fr;
+      min-height: 500px;
+    }
+
+    .form-panel,
+    .result-panel {
+      padding: 34px 38px 38px;
+    }
+
+    .form-panel { border-right: 1px solid var(--line); }
+
+    .section-title {
+      margin: 0 0 23px;
+      font-size: 1rem;
+      color: #dce3ea;
+      letter-spacing: .01em;
+    }
+
+    .field { margin-bottom: 24px; }
+
+    label {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: baseline;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .value {
+      color: var(--yellow);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--yellow);
+    }
+
+    .range-meta {
+      display: flex;
+      justify-content: space-between;
+      color: #7f8995;
+      font-size: .76rem;
+      margin-top: 5px;
+    }
+
+    select,
+    input[type="number"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      color: var(--white);
+      background: var(--panel-2);
+      border-radius: 12px;
+      padding: 13px 14px;
+      font: inherit;
+      outline: none;
+    }
+
+    select:focus,
+    input[type="number"]:focus {
+      border-color: rgba(247,201,72,.75);
+      box-shadow: 0 0 0 3px rgba(247,201,72,.12);
+    }
+
+    .passengers {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .passenger-button {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--panel-2);
+      color: var(--white);
+      min-height: 46px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      transition: .18s ease;
+    }
+
+    .passenger-button:hover { transform: translateY(-1px); }
+
+    .passenger-button.active {
+      background: var(--yellow);
+      color: var(--ink);
+      border-color: var(--yellow);
+    }
+
+    .estimate {
+      width: 100%;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 14px;
+      padding: 15px 18px;
+      background: var(--yellow);
+      color: var(--ink);
+      font: inherit;
+      font-size: 1rem;
+      font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 12px 26px rgba(247,201,72,.18);
+      transition: transform .18s ease, background .18s ease;
+    }
+
+    .estimate:hover {
+      transform: translateY(-2px);
+      background: #ffd85e;
+    }
+
+    .result-panel {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      background: linear-gradient(145deg, rgba(255,255,255,.015), rgba(255,255,255,.045));
+    }
+
+    .result-card {
+      padding: 30px;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: #171b20;
+      text-align: center;
+    }
+
+    .result-label {
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 750;
+      text-transform: uppercase;
+      letter-spacing: .11em;
+    }
+
+    .fare {
+      color: var(--yellow);
+      font-weight: 900;
+      font-size: clamp(3.8rem, 9vw, 6.4rem);
+      line-height: 1;
+      letter-spacing: -.06em;
+      margin: 18px 0 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .duration {
+      color: #dbe2e9;
+      font-size: 1.08rem;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    .summary-item {
+      padding: 13px 8px;
+      border-radius: 12px;
+      background: var(--panel-2);
+      border: 1px solid rgba(255,255,255,.07);
+    }
+
+    .summary-item strong {
+      display: block;
+      color: var(--white);
+      margin-bottom: 3px;
+    }
+
+    .summary-item span {
+      color: var(--muted);
+      font-size: .74rem;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .note {
+      color: #8f99a4;
+      line-height: 1.5;
+      font-size: .78rem;
+      margin: 18px 5px 0;
+      text-align: center;
+    }
+
+    .model-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 19px;
+      border: 1px solid rgba(88,214,141,.26);
+      background: rgba(88,214,141,.07);
+      color: #9be8b8;
+      padding: 8px 11px;
+      border-radius: 999px;
+      font-size: .75rem;
+      font-weight: 800;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      background: var(--success);
+      border-radius: 999px;
+      box-shadow: 0 0 12px rgba(88,214,141,.55);
+    }
+
+    footer {
+      padding: 17px 38px;
+      border-top: 1px solid var(--line);
+      color: #747e88;
+      font-size: .76rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 780px) {
+      body { padding: 12px; }
+      .header { padding: 26px 24px 22px; }
+      .taxi-mark { display: none; }
+      .content { grid-template-columns: 1fr; }
+      .form-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+      .form-panel, .result-panel { padding: 27px 24px; }
+      footer { padding: 16px 24px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <div>
+        <div class="eyebrow">Grace Lei, Suli Kumble, Jerry Hsia, Owen Su</div>
+        <h1>NYC Manhattan Taxi Fare,<br />Prediction Model</h1>
+        <p class="subtitle">A live application of our notebook's fitted two-stage regression model. Enter information known before departure to estimate trip duration and metered fare.</p>
+      </div>
+      <div class="taxi-mark" aria-hidden="true">🚕</div>
+    </header>
+
+    <section class="content">
+      <div class="form-panel">
+        <h2 class="section-title">Trip information</h2>
+
+        <div class="field">
+          <label for="distance">
+            <span>Trip distance</span>
+            <span class="value" id="distanceValue">5.0 miles</span>
+          </label>
+          <input id="distance" type="range" min="0.1" max="15" step="0.1" value="5" />
+          <div class="range-meta"><span>0.1 mi</span><span>15 mi</span></div>
+        </div>
+
+        <div class="field">
+          <label for="hour"><span>Pickup time</span></label>
+          <select id="hour"></select>
+        </div>
+
+        <div class="field">
+          <label><span>Passengers</span><span class="value" id="passengerValue">2</span></label>
+          <div class="passengers" id="passengerButtons" role="group" aria-label="Passenger count"></div>
+        </div>
+
+        <button class="estimate" id="estimateButton" type="button">Estimate fare</button>
+      </div>
+
+      <div class="result-panel">
+        <div class="result-card" aria-live="polite">
+          <div class="result-label">Estimated metered fare</div>
+          <div class="fare" id="fare">$—</div>
+          <div class="duration" id="duration">Estimated trip time: —</div>
+
+          <div class="summary">
+            <div class="summary-item"><strong id="summaryDistance">—</strong><span>Distance</span></div>
+            <div class="summary-item"><strong id="summaryTime">—</strong><span>Pickup</span></div>
+            <div class="summary-item"><strong id="summaryPassengers">—</strong><span>Riders</span></div>
+          </div>
+
+          <div class="model-chip"><span class="dot"></span> Two-stage polynomial + Ridge model</div>
+          <p class="note">Fare amount only. Estimates do not include miscellaneous expenses, fees, or surcharges.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <span>Built from May 2026 NYC TLC yellow taxi trip records.</span>
+      <span>For demonstration and educational use.</span>
+    </footer>
+  </main>
+
+  <script>
+    const MODEL = {"time":{"powers":[[0,0,0],[1,0,0],[0,1,0],[0,0,1],[2,0,0],[1,1,0],[1,0,1],[0,2,0],[0,1,1],[0,0,2]],"coef":[0.0,7.275355845709784,1.1054220894172424,1.0513175574796512,-0.49072991012466094,0.02336741645813145,0.022067030440225843,-0.04286430345299763,-0.0089049489556336,-0.15890183482614345],"intercept":-4.222521782191897},"fare":{"powers":[[1,0,0],[0,1,0],[0,0,1],[2,0,0],[1,1,0],[1,0,1],[0,2,0],[0,1,1],[0,0,2],[3,0,0],[2,1,0],[2,0,1],[1,2,0],[1,1,1],[1,0,2],[0,3,0],[0,2,1],[0,1,2],[0,0,3],[4,0,0],[3,1,0],[3,0,1],[2,2,0],[2,1,1],[2,0,2],[1,3,0],[1,2,1],[1,1,2],[1,0,3],[0,4,0],[0,3,1],[0,2,2],[0,1,3],[0,0,4]],"mean":[1.818893143011349,13.663517159788555,1.2420695591844075,5.178374808885542,32.970327656575826,2.275875014454011,227.87121920180502,17.114320028030946,1.9132758598537896,21.542955094124817,116.81152453968275,6.497376578057999,696.4703668594967,41.526561621379926,3.5443076844011854,4462.719169455192,287.686088585904,26.680329538220683,3.9810106253131705,119.58846778879014,553.4361755911385,26.95427272303525,2906.687309274774,147.30308760603845,10.147523564554696,16426.299466377008,882.2274440787846,65.25357701855778,7.453188236352149,98917.04831704451,5672.568187450487,453.5703688456974,56.11665544601907,11.011524674623875],"scale":[1.3674803630005614,6.417126929239725,0.6087192045604228,9.63186908795376,42.65729484499409,2.2288823394560233,216.7758191693114,12.675583569359793,2.711254351537764,81.52021010064472,279.9935792827516,13.57295253370416,1287.718003698676,64.00869703557079,6.831792210501024,6506.861181095795,346.7549430618603,44.49250401174207,11.086692587539488,989.4011297662619,2075.316783866402,105.93134130617759,8515.515489573801,398.05996261353454,33.799695402355724,39102.31845239438,1896.737353288779,173.6891042494966,26.13437000838139,194331.56148433406,9941.302196800962,1013.0155006080508,174.89560252111022,47.09215648029504],"coef":[5.019785518654745,0.5728344794306804,0.11000416016734631,17.95444272999255,-27.16418530698766,2.748007274325613,13.370586982147598,-0.8567238969051033,-0.5797687784707308,-16.744112132271223,11.696819642321033,7.981485654838304,-17.820011547963144,-11.409368235681415,-0.1931594212492079,9.439715117875531,3.295255964293567,-1.6794876010913964,1.6906881687923176,5.680792083564261,-5.539988466971452,-3.0011167196258177,18.689262472742012,2.958672593767135,-2.6306550116042695,-9.851562431332647,-5.345639466881437,6.7745448146555125,-1.1755434020473605,1.984686571637043,4.329688825218393,-4.358944179987494,2.4934768256923525,-1.2549434367739003],"intercept":14.04919108861251}};
+
+    const distanceInput = document.getElementById('distance');
+    const distanceValue = document.getElementById('distanceValue');
+    const hourSelect = document.getElementById('hour');
+    const passengerButtons = document.getElementById('passengerButtons');
+    const passengerValue = document.getElementById('passengerValue');
+    const estimateButton = document.getElementById('estimateButton');
+
+    let passengers = 2;
+
+    function hourLabel(hour) {
+      const suffix = hour < 12 ? 'AM' : 'PM';
+      const h = hour % 12 || 12;
+      return `${h}:00 ${suffix}`;
+    }
+
+    for (let hour = 0; hour < 24; hour++) {
+      const option = document.createElement('option');
+      option.value = hour;
+      option.textContent = hourLabel(hour);
+      option.selected = hour === 18;
+      hourSelect.appendChild(option);
+    }
+
+    for (let count = 1; count <= 5; count++) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'passenger-button' + (count === passengers ? ' active' : '');
+      button.textContent = count;
+      button.setAttribute('aria-label', `${count} passenger${count === 1 ? '' : 's'}`);
+      button.addEventListener('click', () => {
+        passengers = count;
+        passengerValue.textContent = count;
+        [...passengerButtons.children].forEach((child, index) => {
+          child.classList.toggle('active', index + 1 === count);
+        });
+        predictAndRender();
+      });
+      passengerButtons.appendChild(button);
+    }
+
+    function polynomialFeatures(values, powers) {
+      return powers.map(powerRow =>
+        powerRow.reduce((product, power, index) =>
+          product * Math.pow(values[index], power), 1
+        )
+      );
+    }
+
+    function dot(a, b) {
+      return a.reduce((sum, value, index) => sum + value * b[index], 0);
+    }
+
+    function predictDuration(distance, hour, passengerCount) {
+      const features = polynomialFeatures(
+        [distance, hour, passengerCount],
+        MODEL.time.powers
+      );
+      return Math.max(1, MODEL.time.intercept + dot(MODEL.time.coef, features));
+    }
+
+    function predictFare(distance, duration, passengerCount) {
+      const expanded = polynomialFeatures(
+        [distance, duration, passengerCount],
+        MODEL.fare.powers
+      );
+      const standardized = expanded.map((value, index) => {
+        const scale = MODEL.fare.scale[index] || 1;
+        return (value - MODEL.fare.mean[index]) / scale;
+      });
+      return Math.max(0, MODEL.fare.intercept + dot(MODEL.fare.coef, standardized));
+    }
+
+    function predictAndRender() {
+      const distance = Number(distanceInput.value);
+      const hour = Number(hourSelect.value);
+      const duration = predictDuration(distance, hour, passengers);
+      const fare = predictFare(distance, duration, passengers);
+
+      distanceValue.textContent = `${distance.toFixed(1)} miles`;
+      document.getElementById('fare').textContent = `$${fare.toFixed(2)}`;
+      document.getElementById('duration').textContent = `Estimated trip time: ${duration.toFixed(1)} minutes`;
+      document.getElementById('summaryDistance').textContent = `${distance.toFixed(1)} mi`;
+      document.getElementById('summaryTime').textContent = hourLabel(hour);
+      document.getElementById('summaryPassengers').textContent = passengers;
+    }
+
+    distanceInput.addEventListener('input', predictAndRender);
+    hourSelect.addEventListener('change', predictAndRender);
+    estimateButton.addEventListener('click', predictAndRender);
+
+    predictAndRender();
+  </script>
+</body>
+</html>
